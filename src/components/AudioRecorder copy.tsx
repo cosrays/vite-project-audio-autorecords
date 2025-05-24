@@ -5,19 +5,10 @@ import React, { useState, useRef, useEffect } from 'react';
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isMicrophoneBlocked, setIsMicrophoneBlocked] = useState(false);
-  const [recordings, setRecordings] = useState([]);
+  const [recordings, setRecordings] = useState([]); // 用于存储所有录音
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioStreamRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const lastSoundTimeRef = useRef(Date.now());
-
-  // 配置参数
-  const SILENCE_THRESHOLD = -50; // 静音阈值 (dB)
-  const SILENCE_DURATION = 1000; // 静音持续时间 (ms)
-  const CHECK_INTERVAL = 100; // 检查间隔 (ms)
 
   // 请求麦克风权限
   const getMicrophonePermission = async () => {
@@ -44,56 +35,20 @@ const AudioRecorder = () => {
     }
   };
 
-  // 初始化音频分析
-  const initAudioAnalysis = (stream) => {
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-
-    audioContextRef.current = new AudioContext();
-    const source = audioContextRef.current.createMediaStreamSource(stream);
-    analyserRef.current = audioContextRef.current.createAnalyser();
-    analyserRef.current.fftSize = 2048;
-    source.connect(analyserRef.current);
-  };
-
-  // 检查音频级别
-  const checkAudioLevel = () => {
-    if (!analyserRef.current) return;
-
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
-
-    // 计算平均音量
-    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    const db = 20 * Math.log10(average / 255);
-
-    if (db > SILENCE_THRESHOLD) {
-      lastSoundTimeRef.current = Date.now();
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-    } else if (!silenceTimerRef.current) {
-      silenceTimerRef.current = setTimeout(() => {
-        if (Date.now() - lastSoundTimeRef.current >= SILENCE_DURATION) {
-          stopRecording();
-          startRecording();
-        }
-      }, SILENCE_DURATION);
-    }
-  };
-
   // 开始录音
   const startRecording = async () => {
+    // 检查并请求权限
     const stream = await getMicrophonePermission();
-    if (!stream) return;
+    if (!stream) {
+      return; // 如果没有获取到流 (权限被拒绝或无设备)
+    }
+    audioStreamRef.current = stream; // 保存流，以便后续停止
 
-    audioStreamRef.current = stream;
+    // 清空上一段录音的缓存数据
     audioChunksRef.current = [];
-    lastSoundTimeRef.current = Date.now();
 
     try {
+      // 尝试使用常见的 MIME 类型
       let options = { mimeType: 'audio/webm;codecs=opus' };
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
         console.warn(`${options.mimeType} 不支持，尝试 audio/webm (默认)`);
@@ -101,39 +56,45 @@ const AudioRecorder = () => {
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
           console.warn(`${options.mimeType} 不支持，尝试 audio/ogg;codecs=opus`);
           options = { mimeType: 'audio/ogg;codecs=opus' };
-          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.warn(`${options.mimeType} 不支持，尝试 audio/mp4`);
-            options = { mimeType: 'audio/mp4' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-              console.error("没有合适的 audio/webm, audio/ogg 或 audio/mp4 mimeType 支持 MediaRecorder.");
-              options = {};
-            }
-          }
+           if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+              console.warn(`${options.mimeType} 不支持，尝试 audio/mp4`); // Safari 可能支持 mp4
+              options = { mimeType: 'audio/mp4' };
+               if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                console.error("没有合适的 audio/webm, audio/ogg 或 audio/mp4 mimeType 支持 MediaRecorder.");
+                options = {}; // 使用浏览器默认
+               }
+           }
         }
       }
+      console.log("使用 MediaRecorder MIME 类型:", options.mimeType || "浏览器默认");
 
       mediaRecorderRef.current = new MediaRecorder(stream, options);
-      initAudioAnalysis(stream);
 
       mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log('mediaRecorderRef.current.ondataavailable:');
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
+        console.log('mediaRecorderRef.current.onstop:');
         const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
         setRecordings(prevRecordings => [
           ...prevRecordings,
           { url: audioUrl, id: Date.now(), blob: audioBlob, name: `录音 ${prevRecordings.length + 1}` }
         ]);
+        // 清理 stream tracks (可选，如果每次都重新获取 stream)
+        // audioStreamRef.current?.getTracks().forEach(track => track.stop());
+        // audioStreamRef.current = null;
       };
 
       mediaRecorderRef.current.onerror = (event) => {
         console.error("MediaRecorder 错误:", event.error);
         alert(`录音过程中发生错误: ${event.error.name}`);
         setIsRecording(false);
+        // 发生错误时也清理 stream
         audioStreamRef.current?.getTracks().forEach(track => track.stop());
         audioStreamRef.current = null;
       };
@@ -142,13 +103,10 @@ const AudioRecorder = () => {
       setIsRecording(true);
       console.log("录音开始");
 
-      // 开始定期检查音频级别
-      const checkInterval = setInterval(checkAudioLevel, CHECK_INTERVAL);
-      return () => clearInterval(checkInterval);
-
     } catch (err) {
       console.error("创建 MediaRecorder 失败:", err);
       alert(`启动录音失败: ${err.message}`);
+      // 发生错误时清理 stream
       audioStreamRef.current?.getTracks().forEach(track => track.stop());
       audioStreamRef.current = null;
     }
@@ -160,26 +118,17 @@ const AudioRecorder = () => {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       console.log("录音停止");
-
+      // 在 onstop 事件中处理 blob 创建和 URL 生成
+      // 停止麦克风轨道
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach(track => track.stop());
         audioStreamRef.current = null;
         console.log("麦克风轨道已停止");
       }
-
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
     }
   };
 
-  // 清理: 组件卸载时释放资源
+  // 清理: 组件卸载时释放 Object URL
   useEffect(() => {
     return () => {
       recordings.forEach(record => URL.revokeObjectURL(record.url));
@@ -189,12 +138,6 @@ const AudioRecorder = () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
     };
   }, [recordings]);
 
@@ -202,7 +145,7 @@ const AudioRecorder = () => {
     setRecordings(prevRecordings =>
       prevRecordings.filter(record => {
         if (record.id === idToDelete) {
-          URL.revokeObjectURL(record.url);
+          URL.revokeObjectURL(record.url); // 释放内存
           return false;
         }
         return true;
@@ -212,7 +155,7 @@ const AudioRecorder = () => {
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '600px', margin: 'auto' }}>
-      <h2 style={{ textAlign: 'center', color: '#333' }}>React 自动录音机</h2>
+      <h2 style={{ textAlign: 'center', color: '#333' }}>React 录音机</h2>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', gap: '10px' }}>
         {!isRecording ? (
@@ -252,23 +195,24 @@ const AudioRecorder = () => {
 
       {isRecording && (
         <p style={{ textAlign: 'center', color: 'red', fontWeight: 'bold' }}>
-          🔴 正在录音中... (检测到静音将自动分段)
+          🔴 正在录音中...
         </p>
       )}
       {isMicrophoneBlocked && (
-        <p style={{ textAlign: 'center', color: 'orange', fontWeight: 'bold' }}>
-          麦克风权限被阻止或设备不可用。请检查浏览器设置。
-        </p>
+          <p style={{ textAlign: 'center', color: 'orange', fontWeight: 'bold' }}>
+            麦克风权限被阻止或设备不可用。请检查浏览器设置。
+          </p>
       )}
+
 
       <h3 style={{ marginTop: '30px', borderBottom: '1px solid #eee', paddingBottom: '10px', color: '#555' }}>
         我的录音 ({recordings.length})
       </h3>
       {recordings.length === 0 && !isRecording && (
-        <p style={{ textAlign: 'center', color: '#777' }}>暂无录音。点击"开始录音"来创建您的第一个录音！</p>
+        <p style={{ textAlign: 'center', color: '#777' }}>暂无录音。点击“开始录音”来创建您的第一个录音！</p>
       )}
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {recordings.slice().reverse().map((record) => (
+        {recordings.slice().reverse().map((record) => ( // 使用 slice().reverse() 来显示最新的在前面
           <li
             key={record.id}
             style={{
@@ -285,17 +229,17 @@ const AudioRecorder = () => {
             <span style={{marginRight: '10px', color: '#333'}}>{record.name} - {new Date(record.id).toLocaleTimeString()}</span>
             <audio src={record.url} controls style={{ flexGrow: 1, marginRight: '10px' }} />
             <button
-              onClick={() => handleDeleteRecording(record.id)}
-              style={{
-                backgroundColor: '#e74c3c',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '5px 10px',
-                cursor: 'pointer'
-              }}
+                onClick={() => handleDeleteRecording(record.id)}
+                style={{
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '5px 10px',
+                    cursor: 'pointer'
+                }}
             >
-              删除
+                删除
             </button>
           </li>
         ))}
