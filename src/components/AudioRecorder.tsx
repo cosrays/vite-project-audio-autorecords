@@ -1,189 +1,246 @@
-import React, { useState, useEffect, useRef } from 'react';
+// @ts-nocheck
+
+import React, { useState, useRef, useEffect } from 'react';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [recordedChunks, setRecordedChunks] = useState([]);
-  const [audioRecordings, setAudioRecordings] = useState([]);
+  const [isMicrophoneBlocked, setIsMicrophoneBlocked] = useState(false);
+  const [recordings, setRecordings] = useState([]); // 用于存储所有录音
   const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const audioStreamRef = useRef(null);
-  const silenceTimerRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const dataArrayRef = useRef(null);
-  const sourceRef = useRef(null);
 
-  const SILENCE_THRESHOLD = -50; // dB, adjust as needed
-  const SILENCE_DURATION = 2000; // ms, how long silence should last to stop recording
-  const MIN_RECORDING_DURATION = 500; // ms, minimum recording time to avoid tiny clips
-
-  useEffect(() => {
-    return () => {
-      // Cleanup on component unmount
-      stopListening();
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
-
-  const startListening = async () => {
-    if (isListening) return;
-
+  // 请求麦克风权限
+  const getMicrophonePermission = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('您的浏览器不支持录音功能 (getUserMedia API not found).');
+      setIsMicrophoneBlocked(true);
+      return null;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioStreamRef.current = stream;
-      setIsListening(true);
-      console.log("Started listening...");
+      setIsMicrophoneBlocked(false);
+      return stream;
+    } catch (err) {
+      console.error("获取麦克风权限失败:", err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('您已阻止麦克风权限。请在浏览器设置中允许访问麦克风。');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        alert('未找到麦克风设备。');
+      } else {
+        alert(`获取麦克风权限时发生错误: ${err.message}`);
+      }
+      setIsMicrophoneBlocked(true);
+      return null;
+    }
+  };
 
-      // Initialize AudioContext and Analyser for VAD
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 2048; // Standard FFT size
-      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
-      sourceRef.current.connect(analyserRef.current);
-      dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+  // 开始录音
+  const startRecording = async () => {
+    // 检查并请求权限
+    const stream = await getMicrophonePermission();
+    if (!stream) {
+      return; // 如果没有获取到流 (权限被拒绝或无设备)
+    }
+    audioStreamRef.current = stream; // 保存流，以便后续停止
 
-      // Start VAD loop
-      checkForSpeech();
+    // 清空上一段录音的缓存数据
+    audioChunksRef.current = [];
+
+    try {
+      // 尝试使用常见的 MIME 类型
+      let options = { mimeType: 'audio/webm;codecs=opus' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.warn(`${options.mimeType} 不支持，尝试 audio/webm (默认)`);
+        options = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          console.warn(`${options.mimeType} 不支持，尝试 audio/ogg;codecs=opus`);
+          options = { mimeType: 'audio/ogg;codecs=opus' };
+           if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+              console.warn(`${options.mimeType} 不支持，尝试 audio/mp4`); // Safari 可能支持 mp4
+              options = { mimeType: 'audio/mp4' };
+               if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                console.error("没有合适的 audio/webm, audio/ogg 或 audio/mp4 mimeType 支持 MediaRecorder.");
+                options = {}; // 使用浏览器默认
+               }
+           }
+        }
+      }
+      console.log("使用 MediaRecorder MIME 类型:", options.mimeType || "浏览器默认");
+
+      mediaRecorderRef.current = new MediaRecorder(stream, options);
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log('mediaRecorderRef.current.ondataavailable:');
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        console.log('mediaRecorderRef.current.onstop:');
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setRecordings(prevRecordings => [
+          ...prevRecordings,
+          { url: audioUrl, id: Date.now(), blob: audioBlob, name: `录音 ${prevRecordings.length + 1}` }
+        ]);
+        // 清理 stream tracks (可选，如果每次都重新获取 stream)
+        // audioStreamRef.current?.getTracks().forEach(track => track.stop());
+        // audioStreamRef.current = null;
+      };
+
+      mediaRecorderRef.current.onerror = (event) => {
+        console.error("MediaRecorder 错误:", event.error);
+        alert(`录音过程中发生错误: ${event.error.name}`);
+        setIsRecording(false);
+        // 发生错误时也清理 stream
+        audioStreamRef.current?.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      console.log("录音开始");
 
     } catch (err) {
-      console.error("Error accessing microphone:", err);
-      alert("Could not access microphone. Please check permissions.");
-      setIsListening(false);
-    }
-  };
-
-  const stopListening = () => {
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      console.error("创建 MediaRecorder 失败:", err);
+      alert(`启动录音失败: ${err.message}`);
+      // 发生错误时清理 stream
+      audioStreamRef.current?.getTracks().forEach(track => track.stop());
       audioStreamRef.current = null;
     }
-    if (sourceRef.current) {
-        sourceRef.current.disconnect();
-        sourceRef.current = null;
-    }
-    // Do not close audioContextRef here if you want to restart listening without re-prompting
-    // Or, handle re-initialization if closed. For continuous listening, better to keep it open.
-
-    setIsListening(false);
-    setIsRecording(false);
-    clearTimeout(silenceTimerRef.current);
-    console.log("Stopped listening.");
   };
 
-  const startActualRecording = () => {
-    if (!audioStreamRef.current || isRecording) return;
-
-    setIsRecording(true);
-    setRecordedChunks([]); // Clear chunks for new recording
-    mediaRecorderRef.current = new MediaRecorder(audioStreamRef.current);
-
-    mediaRecorderRef.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        setRecordedChunks((prev) => [...prev, event.data]);
-      }
-    };
-
-    mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(recordedChunks, { type: 'audio/wav' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      if (recordedChunks.length > 0 && audioBlob.size > MIN_RECORDING_DURATION / 1000 * 16000 / 8 * 0.1) { // Heuristic for min size
-          setAudioRecordings((prev) => [...prev, { url: audioUrl, id: Date.now() }]);
-      }
-      setRecordedChunks([]); // Clear for next potential recording
+  // 停止录音
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
-      // If still listening, continue checking for speech
-      if (isListening) {
-        checkForSpeech();
+      console.log("录音停止");
+      // 在 onstop 事件中处理 blob 创建和 URL 生成
+      // 停止麦克风轨道
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
+        console.log("麦克风轨道已停止");
+      }
+    }
+  };
+
+  // 清理: 组件卸载时释放 Object URL
+  useEffect(() => {
+    return () => {
+      recordings.forEach(record => URL.revokeObjectURL(record.url));
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
       }
     };
+  }, [recordings]);
 
-    mediaRecorderRef.current.start();
-    console.log("Actual recording started...");
-    clearTimeout(silenceTimerRef.current); // Clear any pending silence timer
-  };
-
-  const stopActualRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop(); // onstop will handle saving and restarting VAD
-      console.log("Actual recording stopped by silence detection.");
-    }
-    setIsRecording(false); // Ensure isRecording is false if stop is called externally or VAD fails
-  };
-
-  const checkForSpeech = () => {
-    if (!analyserRef.current || !isListening) {
-      if (isRecording) stopActualRecording(); // Stop recording if listening stops
-      return;
-    }
-
-    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-    let sum = 0;
-    for (let i = 0; i < dataArrayRef.current.length; i++) {
-      sum += dataArrayRef.current[i];
-    }
-    const average = sum / dataArrayRef.current.length;
-
-    // Simple VAD: if average volume is above a threshold, consider it speech
-    // This is a very basic VAD. Real VAD is more complex.
-    const isSpeaking = average > 3; // Adjust this threshold based on mic sensitivity and environment
-
-    if (isSpeaking && !isRecording) {
-      console.log("Speech detected, starting recording.");
-      startActualRecording();
-      clearTimeout(silenceTimerRef.current); // Clear silence timer if speech resumes
-    } else if (!isSpeaking && isRecording) {
-      console.log("Silence detected, setting timer.");
-      clearTimeout(silenceTimerRef.current); // Clear previous timer
-      silenceTimerRef.current = setTimeout(() => {
-        if (isRecording) { // Check again in case speech resumed quickly
-            let currentSum = 0;
-            analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-            for (let i = 0; i < dataArrayRef.current.length; i++) {
-                currentSum += dataArrayRef.current[i];
-            }
-            const currentAverage = currentSum / dataArrayRef.current.length;
-            if (currentAverage <= 3) { // Still silent
-                console.log("Silence duration met, stopping recording.");
-                stopActualRecording();
-            } else {
-                console.log("Speech resumed during silence timer, continuing recording.");
-                clearTimeout(silenceTimerRef.current);
-                checkForSpeech(); // Re-evaluate immediately
-            }
+  const handleDeleteRecording = (idToDelete) => {
+    setRecordings(prevRecordings =>
+      prevRecordings.filter(record => {
+        if (record.id === idToDelete) {
+          URL.revokeObjectURL(record.url); // 释放内存
+          return false;
         }
-      }, SILENCE_DURATION);
-    } else if (!isRecording && isListening) {
-        // If not recording and still listening, keep checking
-        requestAnimationFrame(checkForSpeech);
-    } else if (isRecording && isListening) {
-        // If recording and still listening, keep checking (e.g. to restart silence timer if speech continues)
-        requestAnimationFrame(checkForSpeech);
-    }
+        return true;
+      })
+    );
   };
-
 
   return (
-    <div>
-      <h2>Audio Recorder</h2>
-      {!isListening ? (
-        <button onClick={startListening}>Start Listening</button>
-      ) : (
-        <button onClick={stopListening}>Stop Listening</button>
+    <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '600px', margin: 'auto' }}>
+      <h2 style={{ textAlign: 'center', color: '#333' }}>React 录音机</h2>
+
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', gap: '10px' }}>
+        {!isRecording ? (
+          <button
+            onClick={startRecording}
+            disabled={isMicrophoneBlocked}
+            style={{
+              padding: '10px 20px',
+              fontSize: '16px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              opacity: isMicrophoneBlocked ? 0.5 : 1,
+            }}
+          >
+            开始录音
+          </button>
+        ) : (
+          <button
+            onClick={stopRecording}
+            style={{
+              padding: '10px 20px',
+              fontSize: '16px',
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+            }}
+          >
+            停止录音
+          </button>
+        )}
+      </div>
+
+      {isRecording && (
+        <p style={{ textAlign: 'center', color: 'red', fontWeight: 'bold' }}>
+          🔴 正在录音中...
+        </p>
+      )}
+      {isMicrophoneBlocked && (
+          <p style={{ textAlign: 'center', color: 'orange', fontWeight: 'bold' }}>
+            麦克风权限被阻止或设备不可用。请检查浏览器设置。
+          </p>
       )}
 
-      {isListening && <p>👂 Listening...</p>}
-      {isRecording && <p style={{color: 'red'}}>🔴 Recording speech...</p>}
 
-      <h3>Recorded Audio Clips:</h3>
-      {audioRecordings.length === 0 && !isListening && <p>No recordings yet. Click "Start Listening".</p>}
-      {audioRecordings.length === 0 && isListening && <p>Listening for speech to record...</p>}
-      <ul>
-        {audioRecordings.map((record) => (
-          <li key={record.id}>
-            <audio src={record.url} controls />
-            <p>Recorded at: {new Date(record.id).toLocaleTimeString()}</p>
+      <h3 style={{ marginTop: '30px', borderBottom: '1px solid #eee', paddingBottom: '10px', color: '#555' }}>
+        我的录音 ({recordings.length})
+      </h3>
+      {recordings.length === 0 && !isRecording && (
+        <p style={{ textAlign: 'center', color: '#777' }}>暂无录音。点击“开始录音”来创建您的第一个录音！</p>
+      )}
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {recordings.slice().reverse().map((record) => ( // 使用 slice().reverse() 来显示最新的在前面
+          <li
+            key={record.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              marginBottom: '10px',
+              backgroundColor: '#f9f9f9'
+            }}
+          >
+            <span style={{marginRight: '10px', color: '#333'}}>{record.name} - {new Date(record.id).toLocaleTimeString()}</span>
+            <audio src={record.url} controls style={{ flexGrow: 1, marginRight: '10px' }} />
+            <button
+                onClick={() => handleDeleteRecording(record.id)}
+                style={{
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '5px 10px',
+                    cursor: 'pointer'
+                }}
+            >
+                删除
+            </button>
           </li>
         ))}
       </ul>
