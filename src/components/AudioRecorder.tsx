@@ -13,11 +13,12 @@ const AudioRecorder = () => {
   const analyserRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const lastSoundTimeRef = useRef(Date.now());
+  const recordingStartTimeRef = useRef(null);
 
   // 配置参数
   const SILENCE_THRESHOLD = -50; // 静音阈值 (dB)
   const SILENCE_DURATION = 1000; // 静音持续时间 (ms)
-  const CHECK_INTERVAL = 100; // 检查间隔 (ms)
+  const CHECK_INTERVAL = 200; // 检查间隔 (ms)
 
   // 请求麦克风权限
   const getMicrophonePermission = async () => {
@@ -61,6 +62,8 @@ const AudioRecorder = () => {
   const checkAudioLevel = () => {
     if (!analyserRef.current) return;
 
+    console.log('checkAudioLevel maxDecibels', analyserRef.current.maxDecibels);
+
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
 
@@ -84,6 +87,16 @@ const AudioRecorder = () => {
     }
   };
 
+  // 将Blob转换为base64的辅助函数
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // 开始录音
   const startRecording = async () => {
     const stream = await getMicrophonePermission();
@@ -92,6 +105,7 @@ const AudioRecorder = () => {
     audioStreamRef.current = stream;
     audioChunksRef.current = [];
     lastSoundTimeRef.current = Date.now();
+    recordingStartTimeRef.current = Date.now();
 
     try {
       let options = { mimeType: 'audio/webm;codecs=opus' };
@@ -121,12 +135,19 @@ const AudioRecorder = () => {
         }
       };
 
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/wav' });
+        const audioBase64 = await blobToBase64(audioBlob);
+        const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
         setRecordings(prevRecordings => [
           ...prevRecordings,
-          { url: audioUrl, id: Date.now(), blob: audioBlob, name: `录音 ${prevRecordings.length + 1}` }
+          {
+            url: audioBase64,
+            id: Date.now(),
+            blob: audioBlob,
+            name: `录音 ${prevRecordings.length + 1}`,
+            duration: duration.toFixed(1)
+          }
         ]);
       };
 
@@ -142,9 +163,7 @@ const AudioRecorder = () => {
       setIsRecording(true);
       console.log("录音开始");
 
-      // 开始定期检查音频级别
-      const checkInterval = setInterval(checkAudioLevel, CHECK_INTERVAL);
-      return () => clearInterval(checkInterval);
+      checkAudioLevel()
 
     } catch (err) {
       console.error("创建 MediaRecorder 失败:", err);
@@ -182,7 +201,6 @@ const AudioRecorder = () => {
   // 清理: 组件卸载时释放资源
   useEffect(() => {
     return () => {
-      recordings.forEach(record => URL.revokeObjectURL(record.url));
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -196,13 +214,12 @@ const AudioRecorder = () => {
         clearTimeout(silenceTimerRef.current);
       }
     };
-  }, [recordings]);
+  }, []);
 
   const handleDeleteRecording = (idToDelete) => {
     setRecordings(prevRecordings =>
       prevRecordings.filter(record => {
         if (record.id === idToDelete) {
-          URL.revokeObjectURL(record.url);
           return false;
         }
         return true;
@@ -279,24 +296,31 @@ const AudioRecorder = () => {
               border: '1px solid #ddd',
               borderRadius: '4px',
               marginBottom: '10px',
-              backgroundColor: '#f9f9f9'
+              backgroundColor: parseFloat(record.duration) > 3 ? '#e6f3ff' : '#f9f9f9'
             }}
           >
-            <span style={{marginRight: '10px', color: '#333'}}>{record.name} - {new Date(record.id).toLocaleTimeString()}</span>
-            <audio src={record.url} controls style={{ flexGrow: 1, marginRight: '10px' }} />
-            <button
-              onClick={() => handleDeleteRecording(record.id)}
-              style={{
-                backgroundColor: '#e74c3c',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '5px 10px',
-                cursor: 'pointer'
-              }}
-            >
-              删除
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ color: '#333' }}>{record.name}</span>
+              <span style={{ color: '#666', fontSize: '0.9em' }}>
+                {new Date(record.id).toLocaleTimeString()} - {record.duration}秒
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <audio src={record.url} controls style={{ flexGrow: 1 }} />
+              <button
+                onClick={() => handleDeleteRecording(record.id)}
+                style={{
+                  backgroundColor: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '5px 10px',
+                  cursor: 'pointer'
+                }}
+              >
+                删除
+              </button>
+            </div>
           </li>
         ))}
       </ul>

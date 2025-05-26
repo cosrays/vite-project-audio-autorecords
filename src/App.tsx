@@ -1,11 +1,10 @@
-
 import './App.css'
-import AudioRecorder from './components/AudioRecorder'
+import Chat from './pages/chat/chat'
 
 function App() {
   return (
     <div>
-      <AudioRecorder />
+      <Chat />
     </div>
   )
 }
