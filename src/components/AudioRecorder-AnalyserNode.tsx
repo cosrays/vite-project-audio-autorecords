@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -22,7 +23,7 @@ const AutoAudioRecorder = () => {
   // VAD Parameters (these might need tuning)
   const SPEECH_THRESHOLD = 15; // Lower = more sensitive to sound. Range 0-255 for Uint8Array.
   const SILENCE_DURATION_MS = 2000; // How long silence should last to stop recording a segment.
-  const MIN_RECORDING_DURATION_MS = 300; // Minimum duration for a segment to be saved.
+  // const MIN_RECORDING_DURATION_MS = 300; // Minimum duration for a segment to be saved.
   const MIN_BLOB_SIZE_TO_SAVE = 1000; // bytes, smaller blobs are likely noise.
 
   // --- Permission and Setup ---
