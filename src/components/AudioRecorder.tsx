@@ -1,24 +1,22 @@
-// @ts-nocheck
-
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isMicrophoneBlocked, setIsMicrophoneBlocked] = useState(false);
-  const [recordings, setRecordings] = useState([]);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const audioStreamRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const silenceTimerRef = useRef(null);
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSoundTimeRef = useRef(Date.now());
-  const recordingStartTimeRef = useRef(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
 
   // 配置参数
   const SILENCE_THRESHOLD = -50; // 静音阈值 (dB)
   const SILENCE_DURATION = 1000; // 静音持续时间 (ms)
-  const CHECK_INTERVAL = 200; // 检查间隔 (ms)
+  // const CHECK_INTERVAL = 200; // 检查间隔 (ms)
 
   // 请求麦克风权限
   const getMicrophonePermission = async () => {
@@ -31,7 +29,7 @@ const AudioRecorder = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsMicrophoneBlocked(false);
       return stream;
-    } catch (err) {
+    } catch (err: any) {
       console.error("获取麦克风权限失败:", err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         alert('您已阻止麦克风权限。请在浏览器设置中允许访问麦克风。');
@@ -46,7 +44,7 @@ const AudioRecorder = () => {
   };
 
   // 初始化音频分析
-  const initAudioAnalysis = (stream) => {
+  const initAudioAnalysis = (stream: MediaStream) => {
     if (audioContextRef.current) {
       audioContextRef.current.close();
     }
@@ -88,7 +86,7 @@ const AudioRecorder = () => {
   };
 
   // 将Blob转换为base64的辅助函数
-  const blobToBase64 = (blob) => {
+  const blobToBase64 = (blob: Blob) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -108,25 +106,7 @@ const AudioRecorder = () => {
     recordingStartTimeRef.current = Date.now();
 
     try {
-      let options = { mimeType: 'audio/webm;codecs=opus' };
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        console.warn(`${options.mimeType} 不支持，尝试 audio/webm (默认)`);
-        options = { mimeType: 'audio/webm' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-          console.warn(`${options.mimeType} 不支持，尝试 audio/ogg;codecs=opus`);
-          options = { mimeType: 'audio/ogg;codecs=opus' };
-          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.warn(`${options.mimeType} 不支持，尝试 audio/mp4`);
-            options = { mimeType: 'audio/mp4' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-              console.error("没有合适的 audio/webm, audio/ogg 或 audio/mp4 mimeType 支持 MediaRecorder.");
-              options = {};
-            }
-          }
-        }
-      }
-
-      mediaRecorderRef.current = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/wav' });
       initAudioAnalysis(stream);
 
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -138,8 +118,8 @@ const AudioRecorder = () => {
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/wav' });
         const audioBase64 = await blobToBase64(audioBlob);
-        const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
-        setRecordings(prevRecordings => [
+        const duration = (Date.now() - (recordingStartTimeRef.current || 0)) / 1000;
+        setRecordings((prevRecordings: any) => [
           ...prevRecordings,
           {
             url: audioBase64,
@@ -165,7 +145,7 @@ const AudioRecorder = () => {
 
       checkAudioLevel()
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("创建 MediaRecorder 失败:", err);
       alert(`启动录音失败: ${err.message}`);
       audioStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -216,9 +196,9 @@ const AudioRecorder = () => {
     };
   }, []);
 
-  const handleDeleteRecording = (idToDelete) => {
+  const handleDeleteRecording = (idToDelete: number) => {
     setRecordings(prevRecordings =>
-      prevRecordings.filter(record => {
+      prevRecordings.filter((record: any) => {
         if (record.id === idToDelete) {
           return false;
         }
@@ -285,7 +265,7 @@ const AudioRecorder = () => {
         <p style={{ textAlign: 'center', color: '#777' }}>暂无录音。点击"开始录音"来创建您的第一个录音！</p>
       )}
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {recordings.slice().reverse().map((record) => (
+        {recordings.slice().reverse().map((record: any) => (
           <li
             key={record.id}
             style={{

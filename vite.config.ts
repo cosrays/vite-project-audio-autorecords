@@ -10,6 +10,17 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+        additionalData: `@import "${path.resolve(
+          __dirname,
+          'src/styles/variables.less'
+        )}";`,
+      },
+    },
+  },
   server: {
     host: true,
   },
