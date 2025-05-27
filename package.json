@@ -12,6 +12,7 @@
   "dependencies": {
     "@ant-design/icons": "5.x",
     "antd": "^5.25.2",
+    "esdk-obs-browserjs": "^3.24.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

@@ -1,0 +1,95 @@
+.wrapper {
+  position: relative;
+}
+
+.onLNDc {
+  position: absolute;
+  contain: paint;
+  border-radius: inherit;
+  inset: 0;
+
+  filter: blur(12px);
+  opacity: .6;
+
+  &::before {
+    content: "";
+    position: absolute;
+    opacity: 0;
+    background: conic-gradient(rgba(52, 168, 82, 0) 0deg, rgba(52, 168, 82, 1) 38.9738deg, rgba(255, 211, 20, 1) 62.3678deg, rgba(255, 70, 65, 1) 87.0062deg, rgba(49, 134, 255, 1) 107.428deg, rgba(49, 134, 255, 0.5) 204.48deg, rgba(49, 134, 255, 0) 308.88deg, rgba(52, 168, 82, 0) 360deg) border-box;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 900px;
+    height: 900px;
+    scale: 1 .4;
+    pointer-events: none;
+    animation: gradient-spin-expand 1.9s cubic-bezier(0.2,0,0,1);
+    animation-iteration-count: infinite;
+  }
+}
+
+.LmmD9 {
+  position: absolute;
+  contain: paint;
+  border-radius: inherit;
+  inset: 0;
+}
+
+.LmmD9::after {
+  border-radius: inherit;
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--nvzc6,#f7f8f9);
+  z-index: -1
+}
+
+.LmmD9::before{
+  content: "";
+  position: absolute;
+  opacity: 0;
+  background: conic-gradient(rgba(52,168,82,0) 0deg,rgba(52,168,82,1) 38.9738deg,rgba(255,211,20,1) 62.3678deg,rgba(255,70,65,1) 87.0062deg,rgba(49,134,255,1) 107.428deg,rgba(49,134,255,0.5) 204.48deg,rgba(49,134,255,0) 308.88deg,rgba(52,168,82,0) 360deg) border-box;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: 900px;
+  height: 900px;
+  scale: 1 .4;
+  pointer-events: none;
+  animation: gradient-spin-expand 1.9s cubic-bezier(0.2,0,0,1);
+  animation-iteration-count: infinite;
+}
+
+.d4HWzd {
+  position: absolute;
+  contain: paint;
+  border-radius: inherit;
+  inset: 0;
+  border: 0 solid transparent;
+
+  &::before {
+    content: "";
+    contain: paint;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: #fff;
+    filter: blur(0);
+  }
+}
+
+@keyframes gradient-spin-expand {
+  0% {
+      opacity: 0;
+      transform: rotate(90deg)
+  }
+
+  11% {
+      opacity: 1
+  }
+
+  100% {
+      opacity: 0;
+      transform: rotate(250deg)
+  }
+}

@@ -3,6 +3,7 @@ import { Input, Button } from 'antd';
 import { PhoneOutlined, SendOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
+import SpinExpand from '../SpinExpand';
 
 import styles from './index.module.less';
 
@@ -30,7 +31,7 @@ export default function Send({ onSend, placeholder = "请输入内容...", loadi
   };
 
   return (
-    <div className={styles.container}>
+    <SpinExpand className={styles.container}>
       <div>
         <TextArea
           value={content}
@@ -56,6 +57,6 @@ export default function Send({ onSend, placeholder = "请输入内容...", loadi
           发送
         </Button>
       </div>
-    </div>
+    </SpinExpand>
   );
 }
