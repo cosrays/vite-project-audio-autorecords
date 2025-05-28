@@ -17,7 +17,7 @@ const AudioRecorder = () => {
   // 配置参数
   const SILENCE_THRESHOLD = 0.1; // 静音阈值
   const CHECK_INTERVAL = 200; // 检查间隔 (ms)
-  const SILENCE_DURATION = 2000; // 静音持续时间 (ms)
+  const SILENCE_DURATION = 1500; // 静音持续时间 (ms)
 
   const isValidVoiceRef = useRef(false);
 
