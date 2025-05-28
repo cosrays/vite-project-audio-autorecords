@@ -153,6 +153,7 @@ const AudioRecorder = () => {
         // if (!isValidVoice) {
         //   return;
         // }
+        console.log('audioChunksRef.current', audioChunksRef.current, mediaRecorderRef.current?.mimeType);
         const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/wav' });
         const audioBase64 = await blobToBase64(audioBlob);
         const duration = (Date.now() - (recordingStartTimeRef.current || 0)) / 1000;
