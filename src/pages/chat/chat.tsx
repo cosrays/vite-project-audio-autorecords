@@ -5,8 +5,8 @@ import './chat.css';
 export default function Chat() {
   return (
     <div className="chat-container">
-      <div className="flex-1">
-        <div className="h-full overflow-y-auto">
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full">
           <AudioRecorder />
         </div>
       </div>
