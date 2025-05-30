@@ -39,7 +39,7 @@ function concatenatePcmData(pcmDataArray: Uint8Array[]): Uint8Array {
 // 新增函数：将PCM base64直接转换为WAV base64
 async function pcmBase64ToWavBase64(
   pcmBase64: string,
-  sampleRate: number = 24000,
+  sampleRate: number = 16000,
   numChannels: number = 1,
   bitsPerSample: number = 16
 ): Promise<string> {
@@ -50,7 +50,7 @@ async function pcmBase64ToWavBase64(
 // 新增函数：将多个PCM base64拼接后转换为WAV base64
 async function concatenatePcmBase64ToWav(
   pcmBase64Array: string[],
-  sampleRate: number = 24000,
+  sampleRate: number = 16000,
   numChannels: number = 1,
   bitsPerSample: number = 16
 ): Promise<string> {
@@ -60,13 +60,66 @@ async function concatenatePcmBase64ToWav(
   // 拼接PCM数据
   const concatenatedPcm = concatenatePcmData(pcmDataArray);
 
+  // 对音频数据进行音量调节，减少尖锐度
+  const processedPcm = normalizeAudioData(concatenatedPcm);
+
   // 转换为WAV格式
-  return await pcmToWavBase64(concatenatedPcm, sampleRate, numChannels, bitsPerSample);
+  return await pcmToWavBase64(processedPcm, sampleRate, numChannels, bitsPerSample);
+}
+
+// 新增函数：音频数据处理，减少尖锐度
+function normalizeAudioData(pcmData: Uint8Array): Uint8Array {
+  const processedData = new Uint8Array(pcmData.length);
+  let previousSample = 0;
+
+  // 将PCM数据转换为16位有符号整数进行处理
+  for (let i = 0; i < pcmData.length; i += 2) {
+    if (i + 1 < pcmData.length) {
+      // 读取16位PCM样本（小端序）
+      let sample = pcmData[i] | (pcmData[i + 1] << 8);
+
+      // 转换为有符号16位整数
+      if (sample > 32767) {
+        sample -= 65536;
+      }
+
+      // 简单的低通滤波器，减少高频噪声和尖锐度
+      // 使用 alpha = 0.3 的一阶低通滤波器
+      const alpha = 0.3;
+      sample = previousSample + alpha * (sample - previousSample);
+      previousSample = sample;
+
+      // 应用音量调节（降低到75%，比之前的70%稍微提高一点）
+      sample = Math.round(sample * 0.75);
+
+      // 软限幅：减少突然的峰值
+      if (sample > 22000) {
+        sample = 22000 + (sample - 22000) * 0.2;
+      } else if (sample < -22000) {
+        sample = -22000 + (sample + 22000) * 0.2;
+      }
+
+      // 确保在有效范围内
+      sample = Math.max(-32768, Math.min(32767, sample));
+
+      // 转换回无符号16位并写回
+      if (sample < 0) {
+        sample += 65536;
+      }
+
+      processedData[i] = sample & 0xFF;
+      processedData[i + 1] = (sample >> 8) & 0xFF;
+    } else {
+      processedData[i] = pcmData[i];
+    }
+  }
+
+  return processedData;
 }
 
 function pcmToWavBase64(
   pcmData: Uint8Array | Int16Array,
-  sampleRate: number = 24000,
+  sampleRate: number = 16000,
   numChannels: number = 1,
   bitsPerSample: number = 16
 ): Promise<string> {
@@ -129,6 +182,7 @@ export default function Voice() {
       concatenatePcmBase64ToWav(pcmBase64Array).then((wavBase64) => {
         console.log('多个PCM拼接转WAV成功', wavBase64);
         console.log(`拼接了 ${pcmList.length} 个PCM音频片段`);
+        console.log('音频处理: 采样率16kHz, 音量75%, 已应用低通滤波和软限幅');
         setUrl(wavBase64);
       }).catch((error) => {
         console.error('PCM拼接转WAV失败:', error);
@@ -142,12 +196,20 @@ export default function Voice() {
 
   return (
     <div>
-      <div style={{ marginBottom: '10px' }}>
+      <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
         {voiceJson.filter(item => item.type === "audio").length > 0 && (
-          <p>已拼接 {voiceJson.filter(item => item.type === "audio").length} 个PCM音频片段</p>
+          <div>
+            <p><strong>音频信息:</strong></p>
+            <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
+              <li>拼接片段: {voiceJson.filter(item => item.type === "audio").length} 个PCM音频</li>
+              <li>采样率: 16 kHz (降低尖锐度)</li>
+              <li>音量调节: 75% (减少过响)</li>
+              <li>滤波处理: 已应用低通滤波和软限幅</li>
+            </ul>
+          </div>
         )}
       </div>
-      {url && <audio controls src={url} />}
+      {url && <audio controls src={url} style={{ width: '100%' }} />}
     </div>
   )
 }
