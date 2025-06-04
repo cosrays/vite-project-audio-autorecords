@@ -196,19 +196,6 @@ export default function Voice() {
 
   return (
     <div>
-      <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
-        {voiceJson.filter(item => item.type === "audio").length > 0 && (
-          <div>
-            <p><strong>音频信息:</strong></p>
-            <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
-              <li>拼接片段: {voiceJson.filter(item => item.type === "audio").length} 个PCM音频</li>
-              <li>采样率: 16 kHz (降低尖锐度)</li>
-              <li>音量调节: 75% (减少过响)</li>
-              <li>滤波处理: 已应用低通滤波和软限幅</li>
-            </ul>
-          </div>
-        )}
-      </div>
       {url && <audio controls src={url} style={{ width: '100%' }} />}
     </div>
   )
