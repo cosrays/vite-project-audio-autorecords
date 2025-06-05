@@ -3,6 +3,7 @@ import { Button, Space, Card, Input, message } from 'antd';
 import { PlusOutlined, DeleteOutlined, ClearOutlined } from '@ant-design/icons';
 import AudioPlayer from './index';
 
+import { playPcmAudio } from '@/utils/audio';
 import voiceJson from '@/mock/voice.json';
 
 const { TextArea } = Input;
@@ -50,7 +51,7 @@ export default function AudioPlayerDemo() {
     pcmListIndex++;
     setAudioDataList(prev => [...prev, testData]);
     message.success('已添加1秒测试音频');
-  }, [generateTestPCMData]);
+  }, []);
 
   // 添加自定义音频数据
   const addCustomAudio = useCallback(() => {
@@ -98,6 +99,11 @@ export default function AudioPlayerDemo() {
     console.log('播放进度:', `${(progress * 100).toFixed(1)}%`);
   }, []);
 
+  function testPlayVoice() {
+    const testData = pcmList[pcmListIndex++].data;
+    playPcmAudio(testData);
+  }
+
   return (
     <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>动态音频播放器演示</h1>
@@ -116,6 +122,7 @@ export default function AudioPlayerDemo() {
 
       {/* 控制面板 */}
       <Card title="控制面板">
+        <Button onClick={testPlayVoice}>测试play方法</Button>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           {/* 快速添加测试数据 */}
           <div>

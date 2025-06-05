@@ -36,23 +36,12 @@ function concatenatePcmData(pcmDataArray: Uint8Array[]): Uint8Array {
   return concatenated;
 }
 
-// 新增函数：将PCM base64直接转换为WAV base64
-async function pcmBase64ToWavBase64(
-  pcmBase64: string,
-  sampleRate: number = 16000,
-  numChannels: number = 1,
-  bitsPerSample: number = 16
-): Promise<string> {
-  const pcmData = pcmBase64ToPcmData(pcmBase64);
-  return await pcmToWavBase64(pcmData, sampleRate, numChannels, bitsPerSample);
-}
-
 // 新增函数：将多个PCM base64拼接后转换为WAV base64
 async function concatenatePcmBase64ToWav(
   pcmBase64Array: string[],
   sampleRate: number = 16000,
   numChannels: number = 1,
-  bitsPerSample: number = 16
+  bitsPerSample: number = 16,
 ): Promise<string> {
   // 将所有PCM base64转换为PCM数据
   const pcmDataArray = pcmBase64Array.map(base64 => pcmBase64ToPcmData(base64));
@@ -107,8 +96,8 @@ function normalizeAudioData(pcmData: Uint8Array): Uint8Array {
         sample += 65536;
       }
 
-      processedData[i] = sample & 0xFF;
-      processedData[i + 1] = (sample >> 8) & 0xFF;
+      processedData[i] = sample & 0xff;
+      processedData[i + 1] = (sample >> 8) & 0xff;
     } else {
       processedData[i] = pcmData[i];
     }
@@ -121,7 +110,7 @@ function pcmToWavBase64(
   pcmData: Uint8Array | Int16Array,
   sampleRate: number = 16000,
   numChannels: number = 1,
-  bitsPerSample: number = 16
+  bitsPerSample: number = 16,
 ): Promise<string> {
   const dataLength = pcmData.byteLength;
   const header = new ArrayBuffer(44);
@@ -138,18 +127,27 @@ function pcmToWavBase64(
   };
 
   writeString('RIFF');
-  view.setUint32(offset, 36 + dataLength, true); offset += 4;
+  view.setUint32(offset, 36 + dataLength, true);
+  offset += 4;
   writeString('WAVE');
   writeString('fmt ');
-  view.setUint32(offset, 16, true); offset += 4; // Subchunk1Size (PCM)
-  view.setUint16(offset, 1, true); offset += 2;  // AudioFormat = 1 (PCM)
-  view.setUint16(offset, numChannels, true); offset += 2;
-  view.setUint32(offset, sampleRate, true); offset += 4;
-  view.setUint32(offset, byteRate, true); offset += 4;
-  view.setUint16(offset, blockAlign, true); offset += 2;
-  view.setUint16(offset, bitsPerSample, true); offset += 2;
+  view.setUint32(offset, 16, true);
+  offset += 4; // Subchunk1Size (PCM)
+  view.setUint16(offset, 1, true);
+  offset += 2; // AudioFormat = 1 (PCM)
+  view.setUint16(offset, numChannels, true);
+  offset += 2;
+  view.setUint32(offset, sampleRate, true);
+  offset += 4;
+  view.setUint32(offset, byteRate, true);
+  offset += 4;
+  view.setUint16(offset, blockAlign, true);
+  offset += 2;
+  view.setUint16(offset, bitsPerSample, true);
+  offset += 2;
   writeString('data');
-  view.setUint32(offset, dataLength, true); offset += 4;
+  view.setUint32(offset, dataLength, true);
+  offset += 4;
 
   // 合并头部和音频数据
   const wavBuffer = new Uint8Array(44 + dataLength);
@@ -158,7 +156,7 @@ function pcmToWavBase64(
 
   const blob = new Blob([wavBuffer], { type: 'audio/wav' });
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const reader = new FileReader();
     reader.onloadend = () => {
       resolve(reader.result as string); // 返回 base64 字符串
@@ -167,36 +165,29 @@ function pcmToWavBase64(
   });
 }
 
-export default function Voice() {
+export default function Voice({ pcmList }) {
   const [url, setUrl] = useState('');
 
   useEffect(() => {
-    // 过滤出所有audio类型的数据
-    const pcmList = voiceJson.filter(item => item.type === "audio");
-
-    if (pcmList.length > 0) {
+    if (pcmList?.length > 0) {
       // 提取所有PCM base64数据
       const pcmBase64Array = pcmList.map(item => item.data);
 
       // 将多个PCM格式的base64拼接后转换为WAV格式的base64
-      concatenatePcmBase64ToWav(pcmBase64Array).then((wavBase64) => {
-        console.log('多个PCM拼接转WAV成功', wavBase64);
-        console.log(`拼接了 ${pcmList.length} 个PCM音频片段`);
-        console.log('音频处理: 采样率16kHz, 音量75%, 已应用低通滤波和软限幅');
-        setUrl(wavBase64);
-      }).catch((error) => {
-        console.error('PCM拼接转WAV失败:', error);
-      });
+      concatenatePcmBase64ToWav(pcmBase64Array)
+        .then(wavBase64 => {
+          // console.log('多个PCM拼接转WAV成功', wavBase64);
+          console.log(`拼接了 ${pcmList.length} 个PCM音频片段`);
+          console.log('音频处理: 采样率16kHz, 音量75%, 已应用低通滤波和软限幅');
+          setUrl(wavBase64);
+        })
+        .catch(error => {
+          console.error('PCM拼接转WAV失败:', error);
+        });
     } else {
       console.log('没有找到audio类型的数据');
     }
-  }, []);
+  }, [pcmList]);
 
-  console.log('data-url', url);
-
-  return (
-    <div>
-      {url && <audio controls src={url} style={{ width: '100%' }} />}
-    </div>
-  )
+  return <div>{url && <audio controls src={url} style={{ width: '100%' }} />}</div>;
 }
