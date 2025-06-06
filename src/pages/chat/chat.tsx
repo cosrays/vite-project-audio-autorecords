@@ -1,10 +1,12 @@
-import { Button } from 'antd';
-import { useState } from 'react';
-import AudioRecorder from '@/components/AudioRecorder';
-import Send from '@/components/Send';
-import ChatBubble from '@/components/ChatBubble';
 import './chat.css';
 
+import { fetchEventSource } from '@microsoft/fetch-event-source';
+import { Button } from 'antd';
+import { useState } from 'react';
+
+import AudioRecorder from '@/components/AudioRecorder';
+import ChatBubble from '@/components/ChatBubble';
+import Send from '@/components/Send';
 import voiceJson from '@/mock/voice.json';
 const pcmList = voiceJson.filter(item => item.type === 'audio');
 let pcmIndex = 0;
@@ -15,9 +17,13 @@ export default function Chat() {
   });
 
   function testPlayVoice() {
-    setMessage(pre => ({
+    setMessage((pre: any) => ({
       pcmList: [...pre.pcmList, pcmList[pcmIndex++]],
     }));
+  }
+
+  function onSend(text: string) {
+    console.log(text);
   }
 
   return (
@@ -33,7 +39,7 @@ export default function Chat() {
         </div>
       </div>
       <div>
-        <Send />
+        <Send onSend={onSend} />
       </div>
     </div>
   );
