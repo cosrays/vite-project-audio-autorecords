@@ -8,7 +8,7 @@
  */
 export async function playPcmAudio(
   base64PcmData: string,
-  sampleRate: number = 16000,
+  sampleRate: number = 24000,
   channels: number = 1,
   bitDepth: number = 16,
 ): Promise<void> {

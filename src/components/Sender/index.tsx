@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Input, Button } from 'antd';
-import { PhoneOutlined, SendOutlined } from '@ant-design/icons';
+import { PauseCircleOutlined, PhoneOutlined, SendOutlined } from '@ant-design/icons';
 
 const { TextArea } = Input;
 import SpinExpand from '../SpinExpand';
@@ -9,11 +9,12 @@ import styles from './index.module.less';
 
 interface SendProps {
   onSend?: (content: string) => void;
+  onCancel?: () => void;
   placeholder?: string;
   loading?: boolean;
 }
 
-export default function Send({ onSend, placeholder = "请输入内容...", loading = false }: SendProps) {
+export default function Send({ onSend, onCancel, placeholder = '请输入内容...', loading = false }: SendProps) {
   const [content, setContent] = useState('');
 
   const handleSend = () => {
@@ -21,6 +22,11 @@ export default function Send({ onSend, placeholder = "请输入内容...", loadi
       onSend?.(content.trim());
       setContent(''); // 发送后清空输入框
     }
+  };
+
+  const handleCancel = () => {
+    setContent('');
+    onCancel?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -35,7 +41,7 @@ export default function Send({ onSend, placeholder = "请输入内容...", loadi
       <div>
         <TextArea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={e => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoSize={{ minRows: 2 }}
@@ -47,15 +53,15 @@ export default function Send({ onSend, placeholder = "请输入内容...", loadi
         <div>
           <PhoneOutlined />
         </div>
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={handleSend}
-          loading={loading}
-          disabled={!content.trim() || loading}
-        >
-          发送
-        </Button>
+        {loading ? (
+          <Button icon={<PauseCircleOutlined />} onClick={handleCancel}>
+            取消
+          </Button>
+        ) : (
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} disabled={!content.trim() || loading}>
+            发送
+          </Button>
+        )}
       </div>
     </SpinExpand>
   );

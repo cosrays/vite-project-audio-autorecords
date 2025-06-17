@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import voiceJson from '@/mock/voice.json';
 
 function binaryStringToUint8Array(str: string): Uint8Array {
   const len = str.length;
@@ -38,10 +37,10 @@ function concatenatePcmData(pcmDataArray: Uint8Array[]): Uint8Array {
 
 // 新增函数：将多个PCM base64拼接后转换为WAV base64
 async function concatenatePcmBase64ToWav(
-  pcmBase64Array: string[],
-  sampleRate: number = 16000,
-  numChannels: number = 1,
-  bitsPerSample: number = 16,
+  pcmBase64Array: string[], // 包含多个PCM base64编码字符串的数组，用于拼接
+  sampleRate: number = 24000, // 音频采样率，默认16000Hz，表示每秒采集16000个音频样本
+  numChannels: number = 1, // 声道数，默认1表示单声道，2表示立体声
+  bitsPerSample: number = 16, // 每个音频样本的位数，默认16位，影响音频的动态范围和精度
 ): Promise<string> {
   // 将所有PCM base64转换为PCM数据
   const pcmDataArray = pcmBase64Array.map(base64 => pcmBase64ToPcmData(base64));
@@ -108,7 +107,7 @@ function normalizeAudioData(pcmData: Uint8Array): Uint8Array {
 
 function pcmToWavBase64(
   pcmData: Uint8Array | Int16Array,
-  sampleRate: number = 16000,
+  sampleRate: number = 24000,
   numChannels: number = 1,
   bitsPerSample: number = 16,
 ): Promise<string> {
@@ -165,13 +164,13 @@ function pcmToWavBase64(
   });
 }
 
-export default function Voice({ pcmList }) {
+export default function Voice({ pcmList }: { pcmList: string[] }) {
   const [url, setUrl] = useState('');
 
   useEffect(() => {
     if (pcmList?.length > 0) {
       // 提取所有PCM base64数据
-      const pcmBase64Array = pcmList.map(item => item.data);
+      const pcmBase64Array = pcmList;
 
       // 将多个PCM格式的base64拼接后转换为WAV格式的base64
       concatenatePcmBase64ToWav(pcmBase64Array)
@@ -189,5 +188,5 @@ export default function Voice({ pcmList }) {
     }
   }, [pcmList]);
 
-  return <div>{url && <audio controls src={url} style={{ width: '100%' }} />}</div>;
+  return <div>{url && <audio controls src={url} style={{ minWidth: '300px' }} />}</div>;
 }

@@ -1,34 +1,26 @@
-import { useRef, useEffect } from 'react';
-import { playPcmAudio } from '@/utils/audio';
+import { useMemo } from 'react';
+// import { playPcmAudio } from '@/utils/audio';
+
+import { EMessageRole, type IMessage } from '@/interface/chat';
+import cls from 'classnames';
+
 import Voice from '../Voice';
+import Loading from './Loading';
 
-export default function Bubble({ item }) {
-  const voiceQueue = useRef<string>([]);
-  const isRunning = useRef(false);
+import styles from './index.module.less';
 
-  async function runTask(data) {
-    voiceQueue.current.push(data);
-    if (isRunning.current) {
-      return;
-    }
-
-    isRunning.current = true;
-    while (voiceQueue.current.length > 0) {
-      const nextVoice = voiceQueue.current.shift();
-      await playPcmAudio(nextVoice);
-    }
-    isRunning.current = false;
-  }
-
-  useEffect(() => {
-    if (item.pcmList?.length) {
-      runTask(item.pcmList.at(-1).data);
-    }
-  }, [item.pcmList]);
+export default function Bubble({ item }: { item: IMessage }) {
+  const isEnd = useMemo(() => {
+    return item.role === EMessageRole.USER;
+  }, [item.role]);
 
   return (
-    <div>
-      <Voice pcmList={item.pcmList} />
+    <div className={cls('flex', { 'justify-end': isEnd })}>
+      <div>
+        {item.role === EMessageRole.ASSISTANT && !item.isStream && <Voice pcmList={item.pcmList || []} />}
+        {item.isLoading && <Loading />}
+        <div className={cls({ [styles.userChat]: isEnd })}>{item.content}</div>
+      </div>
     </div>
   );
 }

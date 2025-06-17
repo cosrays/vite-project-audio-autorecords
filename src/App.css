@@ -11,12 +11,32 @@
   display: flex;
 }
 
+.gap-2 {
+  gap: 8px;
+}
+
 .flex-1 {
   flex: 1;
 }
 
 .flex-column {
   flex-direction: column;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.align-center {
+  align-items: center;
 }
 
 .h-full {
@@ -41,4 +61,12 @@
 
 .overflow-x-auto {
   overflow-x: auto;
+}
+
+.w-75 {
+  width: 75%;
+}
+
+.max-w-75 {
+  max-width: 75%;
 }
